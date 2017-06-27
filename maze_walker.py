@@ -20,10 +20,15 @@ class Brain:
 class Main:
 	def __init__(self):
 		pygame.init();
-		self.__screen = pygame.display.set_mode((640, 640), 0, 32);
+		self.width = 640;
+		self.height = 640;
+		self.__screen = pygame.display.set_mode((self.width, self.height), 0, 32);
 		pygame.display.set_caption("maze walker");
 		self.__is_shift_pressed = False;
 		self.__is_ctrl_pressed = False;
+		self.__cursor = pygame.image.load("res/BlueRoom.png").convert();
+		self.__cursor_pos = [0, 0];
+		self.__cursor_step = 32;
 
 	def __move_left(self):
 		if self.__is_shift_pressed == True:
@@ -31,7 +36,9 @@ class Main:
 		elif self.__is_ctrl_pressed == True:
 			print("add");
 		else:
-			print("move");
+			new_x = self.__cursor_pos[0] - self.__cursor_step;
+			if new_x >= 0:
+				self.__cursor_pos[0] = new_x;
 
 	def __move_right(self):
 		if self.__is_shift_pressed == True:
@@ -39,7 +46,9 @@ class Main:
 		elif self.__is_ctrl_pressed == True:
 			print("add");
 		else:
-			print("move");
+			new_x = self.__cursor_pos[0] + self.__cursor_step;
+			if new_x < self.width:
+				self.__cursor_pos[0] = new_x;
 
 	def __move_up(self):
 		if self.__is_shift_pressed == True:
@@ -47,7 +56,9 @@ class Main:
 		elif self.__is_ctrl_pressed == True:
 			print("add");
 		else:
-			print("move");
+			new_y = self.__cursor_pos[1] - self.__cursor_step;
+			if new_y >= 0:
+				self.__cursor_pos[1] = new_y;
 
 	def __move_down(self):
 		if self.__is_shift_pressed == True:
@@ -55,7 +66,9 @@ class Main:
 		elif self.__is_ctrl_pressed == True:
 			print("add");
 		else:
-			print("move");
+			new_y = self.__cursor_pos[1] + self.__cursor_step;
+			if new_y < self.height:
+				self.__cursor_pos[1] = new_y;
 
 	def __message_process(self):
 		for event in pygame.event.get():
@@ -82,6 +95,8 @@ class Main:
 	def Update(self):
 		while True:
 			self.__message_process();
+			self.__screen.fill((0, 0, 0));
+			self.__screen.blit(self.__cursor, self.__cursor_pos);
 			pygame.display.update();
 
 if __name__ == '__main__':
