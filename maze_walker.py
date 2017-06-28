@@ -1,5 +1,6 @@
 import pygame
 import numpy as np
+import os
 
 class Room:
 	def __init__(self, owner, x, y, tile):
@@ -10,7 +11,6 @@ class Room:
 
 	def render(self):
 		self.owner.screen.blit(self.tile, (self.x * self.owner.grid_size, self.y * self.owner.grid_size));
-
 
 class Gate:
 	def __init__(self):
@@ -48,6 +48,53 @@ class Main:
 		self.__marked_list = [];
 		self.__room_dict = {};
 		self.__gate_dict = {};
+
+		if os.path.exists("config.txt") == True:
+			fp = open("config.txt", "r");
+			txt = fp.readline();
+			txt_list = txt.split(',');
+			for item in txt_list:
+				gindex = int(item);
+				gx, gy = self.__gindex_to_gx_gy(gindex);
+				self.__room_dict[gindex] = Room(self, gx, gy, self.__blue_room);
+
+	def __px_py_to_gx_gy(self, px, py):
+		gx = px // self.grid_size;
+		gy = py // self.grid_size;
+
+		return gx, gy;
+
+	def __px_py_to_gindex(self, px, py):
+		gx, gy = self.__px_py_to_gx_gy(px, py);
+		gindex = self.__gx_gy_to_gindex(gx, gy);
+
+		return gindex;
+
+	def __gindex_to_gx_gy(self, gindex):
+		gx = gindex % self.grid_size;
+		gy = gindex // self.grid_size;
+		return gx, gy;
+
+	def __gx_gy_to_gindex(self, gx, gy):
+		gindex = gy * self.grid_size + gx;
+		return gindex;
+
+	def __update_gate_info(self):
+		keys = list(self.__room_dict.keys());
+		for gindex in keys:
+			gx, gy = self.__gindex_to_gx_gy(gindex);
+			if gx - 1 >= 0:
+				#left
+				pass
+			elif gx + 1 < self.grid_width:
+				#right
+				pass
+			elif gy - 1 >= 0:
+				#up
+				pass
+			elif gy + 1 < self.grid_height:
+				#down
+				pass
 
 	def __update_editor_mode(self):
 		for v in self.__room_dict.values():
@@ -115,13 +162,25 @@ class Main:
 				elif event.key == pygame.K_1:
 					# 切换到editor_mode
 					self.__change_mode(1);
+				elif event.key == pygame.K_F1:
+					items = list(self.__room_dict.keys());
+					index = 0;
+					outputStr = "";
+					for k in items:
+						if index > 0:
+							outputStr = outputStr + ",";
+						
+						outputStr = outputStr + str(k);
+						index = index + 1;
+
+					fp = open("config.txt", "w");
+					fp.write(outputStr);
+					fp.close();
+					print("saved!");
 				elif event.key == pygame.K_SPACE:
 					px, py = self.__cursor_pos;
-
-					gx = px // self.grid_size;
-					gy = py // self.grid_size;
-
-					gindex = gy * self.grid_size + gx;
+					gx, gy = self.__px_py_to_gx_gy(px, py);
+					gindex = self.__gx_gy_to_gindex(gx, gy);
 
 					if not gindex in self.__room_dict:
 						# 添加元素
