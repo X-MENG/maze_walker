@@ -21,6 +21,30 @@ class Gate:
 		self.owner = owner;
 		self.pass_count = 0;
 		self.connected_room = connected_room;
+		self.q = {};
+		self.q[(connected_room[0], connected_room[1])] = 0;
+		self.q[(connected_room[1], connected_room[0])] = 0;
+
+	def get_r(self, from_room_index, to_room_index):
+		from_room = None;
+		to_room   = None;
+		if from_room_index in self.connected_room:
+			from_room = self.owner.room_dict[from_room_index];
+
+		if to_room_index in self.connected_room:
+			to_room = self.owner.room_dict[to_room_index];
+
+		if from_room = None or to_room = None:
+			return 0;
+
+		r = to_room.score - from_room.score;
+
+		if r < 0:
+			r = 0;
+
+		return r;
+
+
 
 	def add_pass_count(self):
 		self.pass_count = self.pass_count + 1;
@@ -53,7 +77,6 @@ class Robot:
 	def set_begin_gx_gy(self, gx, gy):
 		self.__begin_gx = gx;
 		self.__begin_gy = gy;
-
 
 		self.__begin_px, self.__begin_py = self.__gx_gy_to_px_py(self.__begin_gx, self.__begin_gy);
 
@@ -102,9 +125,9 @@ class Robot:
 
 class Brain:
 	def __init__(self, owner):
-		self.owner = owner;
-		self.main  = owner.owner;
-		self.factor = 0.9;
+		self.owner  = owner;
+		self.main   = owner.owner;
+		self.factor = 0.8;
 
 	def roulette(self, roulette_list):
 		prob_list = [];
@@ -129,33 +152,42 @@ class Brain:
 		gx, gy = self.owner.get_cur_gx_gy();
 		cur_index = self.main.gx_gy_to_gindex(gx, gy);
 		cur_room = self.main.room_dict[cur_index];
-		max_score_room = None;
+
 		normal_neighbours = [];
-		for n in cur_room.neighbours:
+
+		rand_list = [];
+		for n_index in cur_room.neighbours:
+			gate_id = self.main.get_gate_id_by_room(cur_index, n_index);
+			gate = self.main.gate_dict[gate_id];
+			rand_list.add(gate.pass_count + 1);
+		idx = self.roulette(rand_list);
+		target_room_index = cur_room.neighbours[idx];
+
+		target_room = self.main.room_dict[target_room_index];
+
+		max_q_room = None;
+		max_q = -9999;
+
+		for n in target_room.neighbours:
 			n_room = self.main.room_dict[n];
-			if n_room.score > 0:
-				if max_score_room == None:
-					max_score_room = n_room;
-				elif n_room.score > max_score_room.score:
-					max_score_room = n_room;
-			else:
-				normal_neighbours.add(n);
-		if max_score_room != None:
-			if cur_room.score == 0:
-				cur_room.score = max_score_room.score * self.factor;
-			self.owner.set_end_gx_gy(max_score_room.gx, max_score_room.gy);
-			self.owner.start();
-		else:
-			rand_list = [];
-			for n_index in normal_neighbours:
-				gate_id = self.main.get_gate_id_by_room(cur_index, n_index);
-				gate = self.main.gate_dict[gate_id];
-				rand_list.add(gate.pass_count + 1);
-			idx = self.roulette(rand_list);
-			nei_index = normal_neighbours[idx];
-			nei_gx, nei_gy = self.main.gindex_to_gx_gy(nei_index);
-			self.owner.set_end_gx_gy(nei_gx, nei_gy);
-			self.owner.start();
+			target_nei_index = self.main.gx_gy_to_gindex(n_room.gx, n_room.gy);
+			gate_id = self.main.get_gate_id_by_room(target_room_index, target_nei_index);
+			gate = self.main.gate_dict[gate_id];
+			q = gate.q[(target_room_index, target_nei_index)];
+			if q > max_q:
+				max_q = q;
+				max_q_room = n_room;
+
+		max_q_room_index = self.main.gx_gy_to_gindex(max_q_room.gx, max_q_room.gy);
+		gate_id = self.main.get_gate_id_by_room(cur_index, max_q_room_index);
+		gate = self.main.gate_dict[gate_id];
+		r = gate.get_r(cur_index, max_q_room_index);
+
+		new_q = r + self.factor * max_q;
+		gate.q[(cur_index, nei_index)]  = new_q;
+		
+		self.owner.set_end_gx_gy(max_q_room.gx, max_q_room.gy);
+		self.owner.start();
 
 class Main:
 	def __init__(self):
