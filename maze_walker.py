@@ -42,7 +42,7 @@ class Gate:
 	def add_pass_count(self):
 		self.pass_count = self.pass_count + 1;
 
-class Robot:
+class Agent:
 	def __init__(self, main, img):
 		self.main = main;
 		self.__img = img;
@@ -60,7 +60,7 @@ class Robot:
 		self.__brain = Brain(self);
 		self.enable_move = False;
 		self.__direction = (0, 0);
-		self.speed = 5;
+		self.speed = 10;
 		self.__dist = 0;
 
 		#0: unexplored; 1: passed; 2: marked
@@ -95,15 +95,15 @@ class Robot:
 		print("begin px = %d, py = %d" % (self.__begin_px, self.__begin_py));
 		print("end   px = %d, py = %d" % (self.__end_px, self.__end_py));
 
-		print("cur px = %d, py = %d" % (self.__cur_px, self.__cur_py));
+		#print("cur px = %d, py = %d" % (self.__cur_px, self.__cur_py));
 
 		dx = self.__end_gx - self.__begin_gx;
 		dy = self.__end_gy - self.__begin_gy;
 
-		mag = math.sqrt(math.pow(dx, 2) + math.pow(dy, 2));
+		mag = math.sqrt(dx ** 2 + dy ** 2);
 
 		self.__direction = (dx / mag, dy / mag);
-		self.__dist = math.sqrt(math.pow(self.__end_px - self.__begin_px, 2) + math.pow(self.__end_py - self.__begin_py, 2));
+		self.__dist = math.sqrt((self.__end_px - self.__begin_px) ** 2 + (self.__end_py - self.__begin_py) ** 2);
 		self.enable_move = True;
 
 	def __gx_gy_to_px_py(self, gx, gy):
@@ -114,14 +114,13 @@ class Robot:
 
 	def update(self):
 		if self.enable_move == True:
-			print("cur px = %d, py = %d" % (self.__cur_px, self.__cur_py));
-
+			#print("cur px = %d, py = %d" % (self.__cur_px, self.__cur_py));
 			self.main.screen.blit(self.__img, (self.__cur_px, self.__cur_py));
-			delta_time = self.main.clock.tick() / 1000;
-			self.__cur_px = self.__cur_px + self.speed * self.__direction[0] * delta_time;
-			self.__cur_py = self.__cur_py + self.speed * self.__direction[1] * delta_time;
 
-			cur_dist = math.sqrt(math.pow(self.__cur_px - self.__begin_px, 2) + math.pow(self.__cur_py - self.__begin_py, 2));
+			self.__cur_px = self.__cur_px + self.speed * self.__direction[0] * self.main.delta_time;
+			self.__cur_py = self.__cur_py + self.speed * self.__direction[1] * self.main.delta_time;
+
+			cur_dist = math.sqrt((self.__cur_px - self.__begin_px) ** 2 + (self.__cur_py - self.__begin_py) ** 2);
 
 			if cur_dist - self.__dist > 0:
 				self.enable_move = False;
@@ -134,14 +133,14 @@ class Robot:
 					self.main.pass_grid(end_gindex);
 				elif self.target_state == 2:
 					self.main.mark_grid(end_gindex);
-
+				print("find new target grid");
 				if self.thinking() == False:
 					self.enable_move = False;
 
 class Brain:
-	def __init__(self, robot):
-		self.robot  = robot;
-		self.main   = robot.main;
+	def __init__(self, agent):
+		self.agent  = agent;
+		self.main   = agent.main;
 		self.factor = 0.8;
 
 	def roulette(self, roulette_list):
@@ -159,78 +158,81 @@ class Brain:
 		r = random.randint(1, 100) / 100;
 
 		s = 0;
-		idx = -1;
+		idx = 0;
 		for p in prob_list:
 			s = s + p;
 			if s >= r:
 				return idx;
 			idx = idx + 1;
 
-		return idx;
+		return -1;
 
 	def make_descision(self):
 		print("make descision");
-		gx, gy = self.robot.get_cur_gx_gy();
+		gx, gy = self.agent.get_cur_gx_gy();
 		cur_index = self.main.gx_gy_to_gindex(gx, gy);
 
-		if cur_index == self.main.end_gindex:
-			print("new episode");
-			is_success = self.main.new_episode();
-			return is_success;
-		else:
-			cur_room = self.main.room_dict[cur_index];
+		cur_room = self.main.room_dict[cur_index];
 
-			rand_list = [];
+		rand_list = [];
 
-			print("neighbour list: %s" % cur_room.neighbours);
+		print("neighbour list: %s" % cur_room.neighbours);
 
-			for n_index in cur_room.neighbours:
-				gate_id = self.main.get_gate_id_by_room(cur_index, n_index);
+		for n_index in cur_room.neighbours:
+			gate_id = self.main.get_gate_id_by_room(cur_index, n_index);
+			gate = self.main.gate_dict[gate_id];
+			rand_list.append(gate.pass_count + 1);
+
+		if len(rand_list) > 0:
+			idx = self.roulette(rand_list);
+
+			target_room_index = cur_room.neighbours[idx];
+
+			print("target_room_index = %s" % target_room_index);
+
+			target_room = self.main.room_dict[target_room_index];
+
+			max_q = -9999;
+
+			print("target_room neighbours = %s" % target_room.neighbours);
+
+			for n in target_room.neighbours:
+				n_room = self.main.room_dict[n];
+				target_nei_index = self.main.gx_gy_to_gindex(n_room.gx, n_room.gy);
+				gate_id = self.main.get_gate_id_by_room(target_room_index, target_nei_index);
 				gate = self.main.gate_dict[gate_id];
-				rand_list.append(gate.pass_count + 1);
-			if len(rand_list) > 0:
-				idx = self.roulette(rand_list);
+				q = gate.q[(target_room_index, target_nei_index)];
+				print("target_room_index = %d, target_nei_index = %d, q = %d" % (target_room_index, target_nei_index, q));
 
-				target_room_index = cur_room.neighbours[idx];
+				if q > max_q:
+					max_q = q;
 
-				target_room = self.main.room_dict[target_room_index];
+			target_room_index = self.main.gx_gy_to_gindex(target_room.gx, target_room.gy);
+			print("cur_index = %d, target_room_index = %d" % (cur_index, target_room_index));
+			gate_id = self.main.get_gate_id_by_room(cur_index, target_room_index);
+			gate = self.main.gate_dict[gate_id];
+			r = gate.get_r(cur_index, target_room_index);
 
-				max_q = -9999;
-				print("target_room = %s" % target_room.neighbours);
-				for n in target_room.neighbours:
-					n_room = self.main.room_dict[n];
-					target_nei_index = self.main.gx_gy_to_gindex(n_room.gx, n_room.gy);
-					print("target_room_index = %d, target_nei_index = %d" % (target_room_index, target_nei_index));
-					gate_id = self.main.get_gate_id_by_room(target_room_index, target_nei_index);
-					gate = self.main.gate_dict[gate_id];
-					q = gate.q[(target_room_index, target_nei_index)];
-					print("q = %d" % q);
-					if q > max_q:
-						max_q = q;
+			new_q = r + self.factor * max_q;
+			gate.q[(cur_index, target_room_index)]  = new_q;
 
-				target_room_index = self.main.gx_gy_to_gindex(target_room.gx, target_room.gy);
-				print("cur_index = %d, target_room_index = %d" % (cur_index, target_room_index));
-				gate_id = self.main.get_gate_id_by_room(cur_index, target_room_index);
-				print("gate_id = %d" % gate_id);
-				gate = self.main.gate_dict[gate_id];
-				r = gate.get_r(cur_index, target_room_index);
+			print("new_q = %s" % new_q);
 
-				new_q = r + self.factor * max_q;
-				gate.q[(cur_index, target_room_index)]  = new_q;
-
-				if new_q > 0:
-					#marked
-					self.robot.target_state = 2;
-				else:
-					#passed
-					self.robot.target_state = 1;
-
-				self.robot.set_end_gx_gy(target_room.gx, target_room.gy);
-				self.robot.start();
-
-				return True;
+			if new_q > 0:
+				#marked
+				self.agent.target_state = 2;
 			else:
-				return False;
+				#passed
+				self.agent.target_state = 1;
+
+			self.agent.set_begin_gx_gy(cur_room.gx, cur_room.gy);
+			self.agent.set_end_gx_gy(target_room.gx, target_room.gy);
+			print("agent start!");
+			self.agent.start();
+
+			return True;
+		else:
+			return False;
 
 class Main:
 	def __init__(self):
@@ -239,6 +241,7 @@ class Main:
 		self.width = 640;
 		self.height = 640;
 		self.clock = pygame.time.Clock();
+		self.delta_time = 0.0;
 		self.grid_width = self.width / self.grid_size;
 		self.grid_height = self.height / self.grid_size;
 
@@ -248,20 +251,20 @@ class Main:
 		self.blue_tile = pygame.image.load("res/BlueRoom.png");
 		self.red_tile = pygame.image.load("res/RedRoom.png");
 		self.yellow_tile = pygame.image.load("res/YellowRoom.png");
-		self.__robot = pygame.image.load("res/Robot.png");
+		self.__agent = pygame.image.load("res/Robot.png");
 
 		self.__cursor_pos = [0, 0];
 		self.__mode = 1;	#1: editor mode; 2: explore mode
-		self.__unexplored_list = [];
-		self.__passed_list = [];
-		self.__marked_list = [];
+		self.unexplored_list = [];
+		self.passed_list = [];
+		self.marked_list = [];
 		self.room_dict = {};
 		self.gate_dict = {};
 
 		self.begin_gindex = 0;
 		self.end_gindex = 0;
 
-		self.__robot = Robot(self, self.__robot);
+		self.__agent = Agent(self, self.__agent);
 
 		if os.path.exists("config.txt") == True:
 			fp = open("config.txt", "r");
@@ -275,32 +278,32 @@ class Main:
 			self.__update_neighbour_info();
 
 	def new_episode(self):
-		if len(self.__passed_list) > 0:
-			begin_gindex = random.choice(self.__passed_list);
+		if len(self.passed_list) > 0:
+			begin_gindex = random.choice(self.passed_list);
 			gx, gy = self.gindex_to_gx_gy(begin_gindex);
-			self.__robot.set_begin_gx_gy(gx, gy);
-			return self.__robot.thinking();
+			self.__agent.set_begin_gx_gy(gx, gy);
+			return self.__agent.thinking();
 		else:
-			if len(self.__unexplored_list) > 0:
-				begin_gindex = random.choice(self.__unexplored_list);
+			if len(self.unexplored_list) > 0:
+				begin_gindex = random.choice(self.unexplored_list);
 
 				self.pass_grid(begin_gindex);
 
 				gx, gy = self.gindex_to_gx_gy(begin_gindex);
-				self.__robot.set_begin_gx_gy(gx, gy);
-				self.__robot.thinking();
+				self.__agent.set_begin_gx_gy(gx, gy);
+				self.__agent.thinking();
 				return True;
 
 			return False;
 	def pass_grid(self, gindex):
-		if gindex in self.__unexplored_list:
-			self.__unexplored_list.remove(gindex);
-			self.__passed_list.append(gindex);
+		if gindex in self.unexplored_list:
+			self.unexplored_list.remove(gindex);
+			self.passed_list.append(gindex);
 
 	def mark_grid(self, gindex):
-		if gindex in self.__passed_list:
-			self.__passed_list.remove(gindex);
-			self.__marked_list.append(gindex);
+		if gindex in self.passed_list:
+			self.passed_list.remove(gindex);
+			self.marked_list.append(gindex);
 
 	def pass_gate(self, begin_gate_index, end_gate_index):
 		gate_index = self.get_gate_id_by_room(begin_gate_index, end_gate_index);
@@ -430,22 +433,22 @@ class Main:
 			self.screen.blit(self.red_tile, (px, py));
 
 	def __update_explore_mode(self):
-		for r in self.__unexplored_list:
+		for r in self.unexplored_list:
 			rm = self.room_dict[r];
 			px, py = self.gx_gy_to_px_py(rm.gx, rm.gy);
 			self.screen.blit(self.blue_tile, (px, py));
 
-		for r in self.__passed_list:
+		for r in self.passed_list:
 			rm = self.room_dict[r];
 			px, py = self.gx_gy_to_px_py(rm.gx, rm.gy);
 			self.screen.blit(self.yellow_tile, (px, py));
 
-		for r in self.__marked_list:
+		for r in self.marked_list:
 			rm = self.room_dict[r];
 			px, py = self.gx_gy_to_px_py(rm.gx, rm.gy);
 			self.screen.blit(self.red_tile, (px, py));
 
-		self.__robot.update();
+		self.__agent.update();
 
 	def __change_mode(self, new_mode):
 		if self.__mode == new_mode:
@@ -471,25 +474,25 @@ class Main:
 		print("enter explore mode");
 		keys = list(self.room_dict.keys());
 
-		self.__unexplored_list = [];
-		self.__passed_list = [];
-		self.__marked_list = [];
+		self.unexplored_list = [];
+		self.passed_list = [];
+		self.marked_list = [];
 
 		for k in keys:
 			if k == self.begin_gindex:
-				self.__passed_list.append(k);
+				self.passed_list.append(k);
 			elif k == self.end_gindex:
-				self.__marked_list.append(k);
+				self.marked_list.append(k);
 			else:
-				self.__unexplored_list.append(k);
+				self.unexplored_list.append(k);
 		begin_gx, begin_gy = self.gindex_to_gx_gy(self.begin_gindex);
 
 		if self.end_gindex in self.room_dict:
 			room = self.room_dict[self.end_gindex];
 			room.score = 100;
 
-		self.__robot.set_begin_gx_gy(begin_gx, begin_gy);
-		self.__robot.thinking();
+		self.__agent.set_begin_gx_gy(begin_gx, begin_gy);
+		self.__agent.thinking();
 
 	def __exit_explore_mode(self):
 		pass;
@@ -580,6 +583,7 @@ class Main:
 					self.__explore_mode_message_process(event);
 	def update(self):
 		while True:
+			self.delta_time = self.clock.tick() / 1000;
 			self.__message_process();
 			self.screen.fill((0, 0, 0));
 			if self.__mode == 1:
