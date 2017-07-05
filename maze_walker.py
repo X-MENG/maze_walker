@@ -9,12 +9,35 @@ class Room:
 		self.gx = gx;
 		self.gy = gy;
 		self.neighbours = [];
-		self.score = 0;
+		self.score = 0;pass;
+
+	def get_unexplored_neighbours(self):
+		neighbour_list = [];
+		for n in self.neighbours:
+			if n in self.main.unexplored_list:
+				neighbour_list.append(n);
+
+		return neighbour_list;
+
+	def get_passed_neighbours(self):
+		neighbour_list = [];
+		for n in self.neighbours:
+			if n in self.main.passed_list:
+				neighbour_list.append(n);
+
+		return neighbour_list;
+
+	def get_marked_neighbours(self):
+		neighbour_list = [];
+		for n in self.neighbours:
+			if n in self.main.marked_list:
+				neighbour_list.append(n);
+
+		return neighbour_list;
 
 class Gate:
 	def __init__(self, main, connected_room):
 		self.main = main;
-		self.pass_count = 0;
 		self.connected_room = connected_room;
 		self.q = {};
 		self.q[(connected_room[0], connected_room[1])] = 0;
@@ -39,9 +62,6 @@ class Gate:
 
 		return r;
 
-	def add_pass_count(self):
-		self.pass_count = self.pass_count + 1;
-
 class Agent:
 	def __init__(self, main, img):
 		self.main = main;
@@ -60,11 +80,8 @@ class Agent:
 		self.__brain = Brain(self);
 		self.enable_move = False;
 		self.__direction = (0, 0);
-		self.speed = 10;
+		self.speed = 200;
 		self.__dist = 0;
-
-		#0: unexplored; 1: passed; 2: marked
-		self.target_state = 0;
 
 	def get_cur_gx_gy(self):
 		gx, gy = self.main.px_py_to_gx_gy(self.__cur_px, self.__cur_py);
@@ -127,13 +144,12 @@ class Agent:
 				begin_gindex = self.main.gx_gy_to_gindex(self.__begin_gx, self.__begin_gy);
 				end_gindex = self.main.gx_gy_to_gindex(self.__end_gx, self.__end_gy);
 
-				self.main.pass_gate(begin_gindex, end_gindex);
+				self.main.pass_grid(end_gindex);
+				self.__cur_px = self.__end_px;
+				self.__cur_py = self.__end_py;
 
-				if self.target_state == 1:
-					self.main.pass_grid(end_gindex);
-				elif self.target_state == 2:
-					self.main.mark_grid(end_gindex);
-				print("find new target grid");
+				print("cur_px = %s, cur_py = %s, find new target grid" % (self.__cur_px, self.__cur_py));
+				
 				if self.thinking() == False:
 					self.enable_move = False;
 
@@ -145,14 +161,9 @@ class Brain:
 
 	def roulette(self, roulette_list):
 		prob_list = [];
-		max_num = max(roulette_list) + 1;
 
-		r_list = [];
-		for n in roulette_list:
-			 r_list.append(max_num - n);
-
-		s = sum(r_list);
-		for r in r_list:
+		s = sum(roulette_list);
+		for r in roulette_list:
 			prob_list.append(r / s);
 
 		r = random.randint(1, 100) / 100;
@@ -172,21 +183,74 @@ class Brain:
 		gx, gy = self.agent.get_cur_gx_gy();
 		cur_index = self.main.gx_gy_to_gindex(gx, gy);
 
+		print("gx = %s, gy = %s, cur_index = %s" % (gx, gy, cur_index));
+
 		cur_room = self.main.room_dict[cur_index];
+
+		unexplored_neighbour_list = cur_room.get_unexplored_neighbours();
+		passed_neighbour_list = cur_room.get_passed_neighbours();
+		marked_neighbour_list = cur_room.get_marked_neighbours();
+
+		active_neighbour_list = [];
+
+		if len(unexplored_neighbour_list) > 0 and len(passed_neighbour_list) == 0 and len(marked_neighbour_list) == 0:
+			active_neighbour_list = unexplored_neighbour_list;
+			print("active - unexplored_neighbour_list: %s" % active_neighbour_list);
+		elif len(unexplored_neighbour_list) == 0 and len(passed_neighbour_list) > 0 and len(marked_neighbour_list) == 0:
+			active_neighbour_list = passed_neighbour_list;
+			print("active - passed_neighbour_list: %s" % active_neighbour_list);
+		elif len(unexplored_neighbour_list) == 0 and len(passed_neighbour_list) == 0 and len(marked_neighbour_list) > 0:
+			active_neighbour_list = marked_neighbour_list;
+			print("active - marked_neighbour_list: %s" % active_neighbour_list);
+		elif len(unexplored_neighbour_list) > 0 and len(passed_neighbour_list) > 0 and len(marked_neighbour_list) == 0:
+			idx = self.roulette([7, 3]);
+			print("[7, 3] - idx = %s" % idx);
+			if idx == 0:
+				active_neighbour_list = unexplored_neighbour_list;
+				print("active - unexplored_neighbour_list: %s" % active_neighbour_list);
+			else:
+				active_neighbour_list = passed_neighbour_list;
+				print("active - passed_neighbour_list: %s" % active_neighbour_list);
+		elif len(unexplored_neighbour_list) > 0 and len(passed_neighbour_list) == 0 and len(marked_neighbour_list) > 0:
+			idx = self.roulette([3, 7]);
+			print("[3, 7] - idx = %s" % idx);
+			if idx == 0:
+				active_neighbour_list = unexplored_neighbour_list;
+				print("active - unexplored_neighbour_list: %s" % active_neighbour_list);
+			else:
+				active_neighbour_list = marked_neighbour_list;
+				print("active - marked_neighbour_list: %s" % active_neighbour_list);
+		elif len(unexplored_neighbour_list) == 0 and len(passed_neighbour_list) > 0 and len(marked_neighbour_list) > 0:
+			idx = self.roulette([2, 8]);
+			print("[2, 8] - idx = %s" % idx);
+			if idx == 0:
+				active_neighbour_list = passed_neighbour_list;
+				print("active - passed_neighbour_list: %s" % active_neighbour_list);
+			else:
+				active_neighbour_list = marked_neighbour_list;
+				print("active - marked_neighbour_list: %s" % active_neighbour_list);
+		else:
+			idx = self.roulette([3, 2, 5]);
+			print("[3, 2, 5] - idx = %s" % idx);
+			if idx == 0:
+				active_neighbour_list = unexplored_neighbour_list;
+				print("active - unexplored_neighbour_list: %s" % active_neighbour_list);
+			elif idx == 1:
+				active_neighbour_list = passed_neighbour_list;
+				print("active - passed_neighbour_list: %s" % active_neighbour_list);
+			else:
+				active_neighbour_list = marked_neighbour_list;
+				print("active - marked_neighbour_list: %s" % active_neighbour_list);
 
 		rand_list = [];
 
-		print("neighbour list: %s" % cur_room.neighbours);
-
-		for n_index in cur_room.neighbours:
-			gate_id = self.main.get_gate_id_by_room(cur_index, n_index);
-			gate = self.main.gate_dict[gate_id];
-			rand_list.append(gate.pass_count + 1);
+		for n_index in active_neighbour_list:
+			rand_list.append(1);
 
 		if len(rand_list) > 0:
 			idx = self.roulette(rand_list);
 
-			target_room_index = cur_room.neighbours[idx];
+			target_room_index = active_neighbour_list[idx];
 
 			print("target_room_index = %s" % target_room_index);
 
@@ -218,17 +282,16 @@ class Brain:
 
 			print("new_q = %s" % new_q);
 
-			if new_q > 0:
-				#marked
-				self.agent.target_state = 2;
+			if target_room_index in self.main.marked_list:
+				print("new episode");
+				self.main.mark_grid(cur_index);
+				is_successed = self.main.new_episode();
+				return is_successed;
 			else:
-				#passed
-				self.agent.target_state = 1;
-
-			self.agent.set_begin_gx_gy(cur_room.gx, cur_room.gy);
-			self.agent.set_end_gx_gy(target_room.gx, target_room.gy);
-			print("agent start!");
-			self.agent.start();
+				self.agent.set_begin_gx_gy(cur_room.gx, cur_room.gy);
+				self.agent.set_end_gx_gy(target_room.gx, target_room.gy);
+				print("agent start!");
+				self.agent.start();
 
 			return True;
 		else:
@@ -242,8 +305,8 @@ class Main:
 		self.height = 640;
 		self.clock = pygame.time.Clock();
 		self.delta_time = 0.0;
-		self.grid_width = self.width / self.grid_size;
-		self.grid_height = self.height / self.grid_size;
+		self.grid_width = int(self.width / self.grid_size);
+		self.grid_height = int(self.height / self.grid_size);
 
 		self.screen = pygame.display.set_mode((self.width, self.height), 0, 32);
 		pygame.display.set_caption("maze walker");
@@ -305,12 +368,6 @@ class Main:
 			self.passed_list.remove(gindex);
 			self.marked_list.append(gindex);
 
-	def pass_gate(self, begin_gate_index, end_gate_index):
-		gate_index = self.get_gate_id_by_room(begin_gate_index, end_gate_index);
-		if gate_index in self.gate_dict:
-			gate = self.gate_dict[gate_index];
-			gate.add_pass_count();
-
 	def gx_gy_to_px_py(self, gx, gy):
 		px = gx * self.grid_size;
 		py = gy * self.grid_size;
@@ -318,8 +375,8 @@ class Main:
 		return px, py;
 
 	def px_py_to_gx_gy(self, px, py):
-		gx = px // self.grid_size;
-		gy = py // self.grid_size;
+		gx = int(px // self.grid_size);
+		gy = int(py // self.grid_size);
 
 		return gx, gy;
 
@@ -335,13 +392,13 @@ class Main:
 		return px, py;
 
 	def gindex_to_gx_gy(self, gindex):
-		gx = gindex % self.grid_size;
-		gy = gindex // self.grid_size;
+		gx = gindex % self.grid_width;
+		gy = gindex // self.grid_width;
 		return gx, gy;
 
 	def gx_gy_to_gindex(self, gx, gy):
-		gindex = gy * self.grid_size + gx;
-		return gindex;
+		gindex = gy * self.grid_width + gx;
+		return int(gindex);
 
 	def __add_neighbour(self, gate_index, my_room_index, neighbour_room_index):
 		if not my_room_index in self.room_dict or not neighbour_room_index in self.room_dict:
