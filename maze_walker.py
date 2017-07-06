@@ -82,10 +82,14 @@ class Agent:
 		self.__direction = (0, 0);
 		self.speed = 200;
 		self.__dist = 0;
+		self.__type = 0;
 
 	def get_cur_gx_gy(self):
 		gx, gy = self.main.px_py_to_gx_gy(self.__cur_px, self.__cur_py);
 		return gx, gy;
+
+	def set_type(self, t):
+		self.__type = t;
 
 	def set_begin_gx_gy(self, gx, gy):
 		self.__begin_gx = gx;
@@ -105,7 +109,28 @@ class Agent:
 	def thinking(self):
 		self.__brain.make_descision();
 
+	def pilot(self):
+		cur_room_index = self.gx_gy_to_gindex(self.__cur_px, self.__cur_py);
+		cur_room = self.room_dict[cur_room_index];
+		
+		max_q = -9999;
+		max_q_nei = 0;
+
+		for nei_room_index in rm.neighbours:
+			gate_id = self.get_gate_id_by_room(cur_room_index, nei_room_index);
+			gate = self.gate_dict[gate_id];
+			q = gate.q[(cur_room_index, nei_room_index)] 
+			if q > max_q:
+				max_q = q;
+				max_q_nei = nei_room_index;
+
+		gx, gy = self.gindex_to_gx_gy(nei_room_index);
+		self.set_end_gx_gy(gx, gy);
+
 	def start(self):
+		if self.__type == 1:
+			self.pilot();
+
 		print("begin gx = %d, gy = %d" % (self.__begin_gx, self.__begin_gy));
 		print("end   gx = %d, gy = %d" % (self.__end_gx, self.__end_gy));
 
@@ -123,6 +148,7 @@ class Agent:
 		self.__dist = math.sqrt((self.__end_px - self.__begin_px) ** 2 + (self.__end_py - self.__begin_py) ** 2);
 		self.enable_move = True;
 
+
 	def __gx_gy_to_px_py(self, gx, gy):
 		ppx, ppy = self.main.gx_gy_to_px_py(gx, gy);
 		px = ppx + self.__img_size / 2;
@@ -131,27 +157,34 @@ class Agent:
 
 	def update(self):
 		if self.enable_move == True:
-			#print("cur px = %d, py = %d" % (self.__cur_px, self.__cur_py));
-			self.main.screen.blit(self.__img, (self.__cur_px, self.__cur_py));
+			if self.__type == 0:
+				#print("cur px = %d, py = %d" % (self.__cur_px, self.__cur_py));
+				self.main.screen.blit(self.__img, (self.__cur_px, self.__cur_py));
 
-			self.__cur_px = self.__cur_px + self.speed * self.__direction[0] * self.main.delta_time;
-			self.__cur_py = self.__cur_py + self.speed * self.__direction[1] * self.main.delta_time;
+				self.__cur_px = self.__cur_px + self.speed * self.__direction[0] * self.main.delta_time;
+				self.__cur_py = self.__cur_py + self.speed * self.__direction[1] * self.main.delta_time;
 
-			cur_dist = math.sqrt((self.__cur_px - self.__begin_px) ** 2 + (self.__cur_py - self.__begin_py) ** 2);
+				cur_dist = math.sqrt((self.__cur_px - self.__begin_px) ** 2 + (self.__cur_py - self.__begin_py) ** 2);
 
-			if cur_dist - self.__dist > 0:
-				self.enable_move = False;
-				begin_gindex = self.main.gx_gy_to_gindex(self.__begin_gx, self.__begin_gy);
-				end_gindex = self.main.gx_gy_to_gindex(self.__end_gx, self.__end_gy);
-
-				self.main.pass_grid(end_gindex);
-				self.__cur_px = self.__end_px;
-				self.__cur_py = self.__end_py;
-
-				print("cur_px = %s, cur_py = %s, find new target grid" % (self.__cur_px, self.__cur_py));
-				
-				if self.thinking() == False:
+				if cur_dist - self.__dist > 0:
 					self.enable_move = False;
+					begin_gindex = self.main.gx_gy_to_gindex(self.__begin_gx, self.__begin_gy);
+					end_gindex = self.main.gx_gy_to_gindex(self.__end_gx, self.__end_gy);
+
+					self.main.pass_grid(end_gindex);
+					self.__cur_px = self.__end_px;
+					self.__cur_py = self.__end_py;
+
+					print("cur_px = %s, cur_py = %s, find new target grid" % (self.__cur_px, self.__cur_py));
+					
+					if self.thinking() == False:
+						self.enable_move = False;
+			else:
+				#print("cur px = %d, py = %d" % (self.__cur_px, self.__cur_py));
+				self.main.screen.blit(self.__img, (self.__cur_px, self.__cur_py));
+
+				self.__cur_px = self.__cur_px + self.speed * self.__direction[0] * self.main.delta_time;
+				self.__cur_py = self.__cur_py + self.speed * self.__direction[1] * self.main.delta_time;				
 
 class Brain:
 	def __init__(self, agent):
@@ -507,6 +540,15 @@ class Main:
 
 		self.__agent.update();
 
+	def __update_test_mode(self):
+		for r in self.marked_list:
+			rm = self.room_dict[r];
+			px, py = self.gx_gy_to_px_py(rm.gx, rm.gy);
+			self.screen.blit(self.red_tile, (px, py));
+
+		px, py = self.gindex_to_px_py(self.self.end_gindex);
+		sele.screen.blit(self.blue_tile, (px, py));
+
 	def __change_mode(self, new_mode):
 		if self.__mode == new_mode:
 			return;
@@ -517,6 +559,9 @@ class Main:
 		elif new_mode == 2:
 			self.__exit_editor_mode();
 			self.__enter_explore_mode();
+		elif new_mode == 3:
+			self.__exit_explore_mode();
+			self.__enter_test_mode();
 
 		self.__mode = new_mode;
 
@@ -551,6 +596,9 @@ class Main:
 		self.__agent.set_begin_gx_gy(begin_gx, begin_gy);
 		self.__agent.thinking();
 
+	def __enter_test_mode(self):
+		pass;
+
 	def __exit_explore_mode(self):
 		pass;
 
@@ -574,10 +622,19 @@ class Main:
 		if new_y < self.height:
 			self.__cursor_pos[1] = new_y;
 
+	def __test_mode_message_process(self, event):
+		pos = pygame.mouse.get_pos();
+		gx, gy = self.px_py_to_gx_gy(pos[0], pos[1]);
+		self.Robot.set_begin_gx_gy(gx, gy);
+		self.Robot.set_type(1);
+		self.Robot.start();
+
 	def __explore_mode_message_process(self, event):
 		if event.key == pygame.K_1:
 			# switch to editor_mode
 			self.__change_mode(1);
+		elif event.key == pygame.K_3:
+			self.__change_mode(3);
 
 	def __editor_mode_message_process(self, event):
 		if event.key == pygame.K_LEFT:
@@ -638,6 +695,9 @@ class Main:
 					self.__editor_mode_message_process(event);
 				elif self.__mode == 2:
 					self.__explore_mode_message_process(event);
+			elif event.type == pygame.MOUSEBUTTONDOWN:
+				elif self.__mode == 3:
+					self.__test_mode_message_process(event);
 	def update(self):
 		while True:
 			self.delta_time = self.clock.tick() / 1000;
@@ -649,6 +709,9 @@ class Main:
 			elif self.__mode == 2:
 				# explore mode
 				self.__update_explore_mode();
+			elif self.__mode == 3:
+				# test mode
+				self.__update_test_mode();
 
 			pygame.display.update();
 
