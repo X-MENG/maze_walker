@@ -255,7 +255,7 @@ class Brain:
 				active_neighbour_list = marked_neighbour_list;
 				#print("active - marked_neighbour_list: %s" % active_neighbour_list);
 		elif len(unexplored_neighbour_list) == 0 and len(passed_neighbour_list) > 0 and len(marked_neighbour_list) > 0:
-			idx = self.roulette([2, 8]);
+			idx = self.roulette([1, 9]);
 			#print("[2, 8] - idx = %s" % idx);
 			if idx == 0:
 				active_neighbour_list = passed_neighbour_list;
@@ -264,7 +264,7 @@ class Brain:
 				active_neighbour_list = marked_neighbour_list;
 				#print("active - marked_neighbour_list: %s" % active_neighbour_list);
 		else:
-			idx = self.roulette([3, 2, 5]);
+			idx = self.roulette([2, 1, 7]);
 			#print("[3, 2, 5] - idx = %s" % idx);
 			if idx == 0:
 				active_neighbour_list = unexplored_neighbour_list;
@@ -587,6 +587,14 @@ class Main:
 
 	def __enter_explore_mode(self):
 		#print("enter explore mode");
+
+		for rm in self.room_dict.values():
+			rm.neighbours = [];
+
+		self.gate_dict = {};
+
+		self.__update_neighbour_info();
+
 		self.explore_start_time = time.time();
 		self.episode_start_time = time.time();
 		print("start explore...");
@@ -681,7 +689,7 @@ class Main:
 			fp = open("config.txt", "w");
 			fp.write(outputStr);
 			fp.close();
-			#print("saved!");
+			print("saved!");
 		elif event.key == pygame.K_SPACE:
 			px, py = self.__cursor_pos;
 			gx, gy = self.px_py_to_gx_gy(px, py);
