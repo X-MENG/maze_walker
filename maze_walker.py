@@ -10,7 +10,7 @@ class Room:
 		self.gx = gx;
 		self.gy = gy;
 		self.neighbours = [];
-		self.score = 0;pass;
+		self.score = 0;
 
 	def get_unexplored_neighbours(self):
 		neighbour_list = [];
